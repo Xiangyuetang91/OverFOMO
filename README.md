@@ -358,14 +358,53 @@ VMware virtual machine, with ROS Noetic (`rosversion 1.16.0`)**, and the
 repository checked out at `/home/user/catkin_ws/src/OverFOMO`:
 
 ```sh
-sudo apt install ros-noetic-desktop-full python3-numpy
-source /opt/ros/noetic/setup.bash
-
 # In the repository:
 cd ros
 catkin_make
 source devel/setup.bash
 ```
+
+> **Installing ROS 1 on 22.04.** ROS Noetic is only released for Ubuntu 20.04
+> (Focal), so on a stock 22.04 `sudo apt install ros-noetic-desktop-full` finds
+> no candidate. The VM above already had it installed; if you are building a
+> fresh box, the options are, in order of preference:
+>
+> 1. **Use 20.04, or the `ros:noetic` container** (which is 20.04-based). This
+>    is the supported path and needs nothing clever.
+> 2. **Install 22.04 + ROS 2 Humble**, the natively supported distribution on
+>    Jammy. This package is a ROS 1 catkin workspace, so it would need porting
+>    first &mdash; not a drop-in.
+> 3. **Add the Focal ROS 1 repo to Jammy with an apt pin.** This works in
+>    practice and is what many people do, but it is an unsupported mix:
+>
+>    ```sh
+>    sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu focal main" \
+>      > /etc/apt/sources.list.d/ros1-latest.list'
+>    sudo apt install curl
+>    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc \
+>      | sudo apt-key add -
+>
+>    # Pin the repo low so Jammy is preferred for everything it already ships.
+>    sudo tee /etc/apt/preferences.d/ros1-pin >/dev/null <<'EOF'
+>    Package: *
+>    Pin: release n=focal
+>    Pin-Priority: 1
+>    EOF
+>
+>    sudo apt update
+>    sudo apt install ros-noetic-desktop-full python3-numpy
+>    source /opt/ros/noetic/setup.bash
+>    ```
+>
+>    The pin is not optional: without it, adding the Focal repo lets apt
+>    consider Focal versions of unrelated system libraries on a Jammy box.
+>    With the pin at priority 1, apt only reaches into Focal for package names
+>    that Jammy does not provide at all &mdash; which is exactly the `ros-noetic-*`
+>    set.
+>
+> The steps below assume ROS Noetic is already installed and sourced. Only
+> `catkin_make` and the launch are required to go from this repository to the
+> screenshot.
 
 Then launch the demo &mdash; the planner runs, publishes once on latched topics,
 and RViz opens on the result:
