@@ -118,27 +118,41 @@ diagnostic figures to `results/ap_cpp_demo/`.
 ```
 === AP-CPP (active perception) ===
   termination            : max_steps
-  observation steps      : 300
-  flight distance        : 1821.5 m
-  mean belief entropy    : 0.2384 (was 1.0000)
-  coverage fraction      : 0.2076
-  cumulative information : 63.101
+  observation steps      : 864
+  flight distance        : 5183.1 m
+  mean belief entropy    : 0.2084 (was 1.0000)
+  coverage fraction      : 0.5805
+  cumulative information : 122.327
 
 === Active perception vs reference-only ablation ===
 metric                           active    reference      delta
 ------------------------------------------------------------------
-flight distance [m]              1821.5       1767.7        +53.8
-mean entropy                     0.2384       0.2560      -0.0176
-coverage fraction                0.2076       0.2359      -0.0283
-information gain                 63.101       28.299      +34.802
+flight distance [m]              5183.1       5047.4       +135.7
+mean entropy                     0.2084       0.2273      -0.0190
+coverage fraction                0.5805       0.7580      -0.1776
+information gain                122.327       84.935      +37.392
 ```
 
-The honest reading of those numbers: **AP-CPP more than doubles the information
-gathered per unit of flight** (+123%), and spends a small amount of coverage
-throughput (−0.028) to do it. That is the trade the user is buying. To recover
-coverage, raise the `frontier`/`information` weights, or run a longer mission.
-On an *uninformative* prior the two configurations are identical by design &mdash;
-see `test_active_mode_does_not_degrade_a_uniform_prior_mission`.
+The honest reading of those numbers: **AP-CPP gathers 44% more information**
+(+37.4 nats) and resolves the belief further (mean entropy 0.2084 vs 0.2273), at
+the cost of **0.178 of coverage** &mdash; it finishes the reference route having
+covered 58% of the field where the plain sweep reaches 76%. Per metre flown the
+information advantage is +40%. The two arms fly essentially the same mission
+(864 vs 863 observation steps, 5183 m vs 5047 m over the identical reference
+route), so this is a like-for-like trade rather than one arm simply flying
+longer.
+
+That trade is what the user is buying, and the coverage cost is real: if
+throughput matters more than map quality, raise the `frontier`/`information`
+weights, or run a longer mission. On an *uninformative* prior the two
+configurations are identical by design &mdash; see
+`test_active_mode_does_not_degrade_a_uniform_prior_mission`.
+
+> These figures are reproducible from the committed code: the step budget
+> derives from the reference route itself, and the reference-only arm runs with
+> `enable_coverage_repair` off (see `coverage_repair` under **The pieces**), so
+> neither arm can fly past the end of the route and bank coverage the other one
+> never gets a chance at.
 
 ### 3. Run against the real field shipped in this repo
 
@@ -148,6 +162,24 @@ converted through the same WGS84→NED path as the flight code:
 ```sh
 python demos/run_ap_cpp_demo.py --source geojson --field 002 --compare
 ```
+
+```
+=== Active perception vs reference-only ablation ===
+metric                           active    reference      delta
+------------------------------------------------------------------
+flight distance [m]               572.7        562.2        +10.5
+duration [s]                      217.9        221.8         -4.0
+observation steps                   100           99           +1
+mean entropy                     0.2143       0.2203      -0.0060
+coverage fraction                0.5605       0.7445      -0.1839
+information gain                 10.987        9.518       +1.469
+```
+
+The same qualitative trade shows up on the real field &mdash; more information
+(+15%), less coverage (−0.184). The information margin is much smaller here than
+on the synthetic field because field 002's route is short (591.6 m, 99
+observation steps), so neither arm has much room to diverge before the route
+runs out. Reports and figures land in `results/ap_cpp_demo_geojson/`.
 
 ### 4. Run the test suite
 
@@ -171,9 +203,18 @@ invariants and the WGS84 round trip. No simulator or TensorFlow required.
 --step-length FLOAT            # observation spacing, m, default 6.0
 --entropy-bias FLOAT           # uncertainty discount in A* edge cost
 --coverage-target / --entropy-target
+--max-steps INT                # step budget; default = one pass over the route
+--max-time FLOAT               # wall-clock budget; default derived so steps bind first
 --no-plots                     # skip figure generation
 --compare                      # run the reference-only ablation
 ```
+
+> Both arms of an ablation must fly the *same* mission, so the default budgets
+> derive from the reference route rather than a fixed constant. The shipped
+> `TurnWPs.txt` routes are far shorter than the fields they cover: a fixed
+> 400-step budget would let both arms fly hundreds of steps past the end of the
+> route, and the reference-only arm would bank coverage the published sweep
+> never performs.
 
 ### 6. Fly it in AirSim
 
@@ -185,6 +226,60 @@ python -m ap_cpp.airsim_driver --dry-run    # validate config without Unreal
 `--dry-run` exercises the full belief loop against the real orthomosaic without
 connecting to the simulator &mdash; the fastest way to check that a field's
 configuration is sane before launching Unreal.
+
+### 7. Visualise it in RViz (ROS 1, no AirSim)
+
+`ros/` is a standard catkin workspace containing one package, `ap_cpp_ros`. The
+node runs the planner **headlessly** against the same field definitions the
+demo uses and publishes the result for RViz, so this path needs neither AirSim,
+Unreal, nor the TensorFlow/GDAL stack &mdash; only a sourced ROS 1 environment
+and NumPy.
+
+On the ROS machine (typically an Ubuntu VM; ROS 1 Noetic on Ubuntu 20.04):
+
+```sh
+sudo apt install ros-noetic-desktop-full python3-numpy
+source /opt/ros/noetic/setup.bash
+
+# In the repository:
+cd ros
+catkin_make
+source devel/setup.bash
+```
+
+Then launch the demo &mdash; the planner runs, publishes once on latched topics,
+and RViz opens on the result:
+
+```sh
+roslaunch ap_cpp_ros rviz_demo.launch
+roslaunch ap_cpp_ros rviz_demo.launch source:=geojson field:=002
+roslaunch ap_cpp_ros rviz_demo.launch reference_only:=true   # the ablation arm
+```
+
+Or run the node directly and start RViz yourself:
+
+```sh
+rosrun ap_cpp_ros ap_cpp_rviz_node.py --source geojson --field 002
+rviz -d $(rospack find ap_cpp_ros)/config/rviz_demo.rviz
+```
+
+What you get:
+
+| Topic | Type | Contents |
+|---|---|---|
+| `/ap_cpp_rviz/path` | `nav_msgs/Path` | the flown observation path |
+| `/ap_cpp_rviz/markers` | `visualization_msgs/MarkerArray` | coverage raster, obstacles, reference sweep, endpoints, summary label |
+
+The node plans in NED metres and publishes ENU for RViz
+(`ros.x = ned.y`, `ros.y = ned.x`, `ros.z = −ned.z`), which puts the field in
+the `z = +altitude` plane with north along `+y`. Pass `--no-frame-swap` to
+publish raw NED. `--decimate N` thins the raster markers if RViz struggles on a
+large field.
+
+> **Moving the repo into the VM.** The ROS machine only needs the repository
+> itself &mdash; `ap_cpp/`, `CPP/` and `ros/`. Either clone it inside the VM or
+> share the host folder and run `catkin_make` from the shared copy. Nothing in
+> this path imports `airsim`, so the AirSim install is not required.
 
 ---
 
@@ -306,7 +401,13 @@ for the leg it never flies and win by being lazy:
 - `fan_{±θ}` — straight marches on an angular fan, for the common case where a
   small heading tweak beats a detour.
 - `coverage_repair` — shortest path to the most overdue cell by
-  `(1 − C) / distance`.
+  `(1 − C) / distance`. Gated behind `enable_coverage_repair`, which the demo
+  binds to the `active` flag. The holes this generator patches are the ones
+  active perception *created* by leaving the corridor, so a reference-only
+  baseline must not be handed it: with the gate open the baseline keeps flying
+  after its route is spent and banks coverage the published sweep never
+  performs, silently turning the ablation into a comparison of two different
+  missions. A genuine reference-only run holds station when its route runs out.
 
 Only the first `execute_steps` poses are committed. The next replan starts from
 **the pose actually reached**, which is where wind, controller lag and model
@@ -348,6 +449,14 @@ OverFOMO/
 │
 ├── demos/
 │   └── run_ap_cpp_demo.py       # One-command runnable demo + ablation + figures
+│
+├── ros/                         # catkin workspace: RViz visualisation, no AirSim
+│   └── src/ap_cpp_ros/
+│       ├── package.xml
+│       ├── CMakeLists.txt
+│       ├── scripts/ap_cpp_rviz_node.py   # publishes Path + MarkerArray
+│       ├── launch/rviz_demo.launch       # standalone, no simulator
+│       └── config/rviz_demo.rviz
 │
 ├── tests/
 │   └── test_ap_cpp.py           # 43 regression tests, NumPy-only

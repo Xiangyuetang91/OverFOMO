@@ -77,6 +77,40 @@ def synthetic_field():
     return polygon, obstacles
 
 
+def route_budget(route, step_length):
+    """Observation steps in exactly one pass over ``route``.
+
+    ``MissionConfig.max_steps`` is a wall-clock safety valve, not a mission
+    plan, but it silently becomes the plan when a route is much shorter than
+    the field it covers.  A mission that outlives its reference route falls
+    through to the fallback generators and flies on for hundreds of steps that
+    have nothing to do with either configuration being compared - which turns
+    an ablation into a comparison of two different missions.
+
+    The reference route is never re-flown, so one pass is the budget: a route
+    that runs out ends the mission rather than restarting it, and both arms of
+    the comparison get the identical allowance.
+    """
+    if not route or len(route) < 2:
+        return 1
+    pts = np.array([p.xy for p in route], dtype=float)
+    length = float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
+    return max(int(math.ceil(length / max(step_length, 1e-6))), 1)
+
+
+def route_time_budget(max_steps, step_length, nominal_speed, q_max):
+    """Wall-clock allowance generous enough to let ``max_steps`` bind first.
+
+    ``max_time`` is a safety valve; if it fires before the step budget does,
+    the two arms of an ablation stop at different step counts - the slower one
+    (active perception) simply gets less done - and the comparison silently
+    becomes "equal wall-clock" rather than "equal route".  Sized against the
+    slowest speed the controller can command, so it cannot fire early.
+    """
+    v_min = max(float(nominal_speed) - float(q_max), 0.5)
+    return max_steps * float(step_length) / v_min
+
+
 def seed_prior(grid, kind="anomaly", weight=0.85, seed=0):
     """Overlay a non-uniform uncertainty prior on the belief.
 
@@ -157,8 +191,25 @@ def build_grid(args):
 # --------------------------------------------------------------------------- #
 # Mission assembly
 # --------------------------------------------------------------------------- #
-def build_mission(args, grid, reference_route, active=True, seed=7):
-    """Wire up sensor -> utility -> planner -> perception -> controller."""
+def build_mission(
+    args, grid, reference_route, active=True, seed=7, max_steps=None, max_time=None
+):
+    """Wire up sensor -> utility -> planner -> perception -> controller.
+
+    Returns ``(mission, sensor_config, max_steps)``; ``max_steps`` is the step
+    budget the mission was actually built with, which may have been derived
+    from the route rather than taken from ``--max-steps``.
+    """
+    if max_steps is None:
+        max_steps = mission_budget(args, reference_route)
+    if max_time is None:
+        max_time = (
+            float(args.max_time)
+            if args.max_time is not None
+            else route_time_budget(
+                max_steps, args.step_length, args.nominal_speed, args.q_max
+            )
+        )
     sensor_cfg = SensorConfig(altitude=args.altitude)
     sensor_cfg.coverage_gain = args.coverage_gain
     sensor = SensorModel(sensor_cfg)
@@ -177,6 +228,11 @@ def build_mission(args, grid, reference_route, active=True, seed=7):
         frontier_targets=args.frontier_targets if active else 0,
         fan_offsets_deg=(-60, -30, 0, 30, 60) if active else (),
         entropy_bias=args.entropy_bias if active else 0.0,
+        # The reference-only ablation must be exactly that: no excursions, no
+        # fan, and no hole patching.  Leaving coverage repair on would let the
+        # baseline keep flying after the reference route is spent and bank
+        # coverage that the published sweep never performs.
+        enable_coverage_repair=active,
     )
     planner = RollingHorizonPlanner(grid, sensor=sensor, utility=utility, config=planner_cfg)
 
@@ -191,8 +247,8 @@ def build_mission(args, grid, reference_route, active=True, seed=7):
     mission_cfg = MissionConfig(
         coverage_target=args.coverage_target,
         entropy_target=args.entropy_target,
-        max_steps=args.max_steps,
-        max_time=args.max_time,
+        max_steps=max_steps,
+        max_time=max_time,
     )
 
     return APCPPMission(
@@ -203,7 +259,22 @@ def build_mission(args, grid, reference_route, active=True, seed=7):
         reference_route=reference_route,
         config=mission_cfg,
         sensor=sensor,
-    ), sensor_cfg
+    ), sensor_cfg, mission_cfg.max_steps
+
+
+def mission_budget(args, reference_route):
+    """Resolve ``--max-steps``: explicit wins, otherwise derive from the route.
+
+    Defaulting to the route length rather than a fixed 400 steps is what keeps
+    both arms of the ablation on the same mission.  A fixed budget is fine on
+    the synthetic field, whose route spans the whole raster, but the shipped
+    ``TurnWPs.txt`` routes are far shorter than the field they cover: field 002
+    is 591.6 m, i.e. 99 observation steps at the default 6 m spacing, so a
+    400-step budget flies 301 steps past the end of the reference route.
+    """
+    if args.max_steps is not None:
+        return int(args.max_steps)
+    return route_budget(reference_route, args.step_length)
 
 
 # --------------------------------------------------------------------------- #
@@ -365,8 +436,12 @@ def parse_args(argv=None):
                    help="weight of the active-perception term in the speed law")
     p.add_argument("--coverage-target", type=float, default=0.85)
     p.add_argument("--entropy-target", type=float, default=0.25)
-    p.add_argument("--max-steps", type=int, default=400)
-    p.add_argument("--max-time", type=float, default=1800.0)
+    p.add_argument("--max-steps", type=int, default=None,
+                   help="step budget; default is the observation-step count of one "
+                        "pass over the reference route (route length / step length)")
+    p.add_argument("--max-time", type=float, default=None,
+                   help="wall-clock budget in s; default is derived from the step "
+                        "budget so that max_steps binds first")
     p.add_argument("--seed", type=int, default=7)
     p.add_argument("--prior", choices=("none", "anomaly", "two_zones"), default="anomaly",
                    help="non-uniform uncertainty prior to seed the belief with")
@@ -402,9 +477,22 @@ def main(argv=None):
         *grid.cell_center(*grid.free_cells()[0]), 0.0
     )
 
+    max_steps = mission_budget(args, reference_route)
+    max_time = args.max_time if args.max_time is not None else route_time_budget(
+        max_steps, args.step_length, args.nominal_speed, args.q_max
+    )
+    print("[budget] max_steps = {} ({})  max_time = {:.0f} s".format(
+        max_steps,
+        "--max-steps" if args.max_steps is not None else "one pass over the reference route",
+        max_time,
+    ))
+
     # ---------------------------------------------------------------- active
     grid_active, _, _ = build_grid(args)
-    mission, sensor_cfg = build_mission(args, grid_active, reference_route, active=True, seed=args.seed)
+    mission, sensor_cfg, _ = build_mission(
+        args, grid_active, reference_route, active=True, seed=args.seed,
+        max_steps=max_steps, max_time=max_time,
+    )
     snapshot_before = grid_active.snapshot()
 
     print("\n[sensor] footprint {:.1f} x {:.1f} m, sensing radius {:.1f} m".format(
@@ -412,7 +500,7 @@ def main(argv=None):
 
     t0 = time.perf_counter()
     for step in mission.step(start_pose):
-        print_progress(step, args.max_steps)
+        print_progress(step, max_steps)
     elapsed = time.perf_counter() - t0
 
     active_summary = summarise("AP-CPP (active perception)", mission, grid_active, elapsed)
@@ -431,13 +519,17 @@ def main(argv=None):
     # -------------------------------------------------------------- ablation
     if args.compare:
         grid_base, _, _ = build_grid(args)
-        baseline, _ = build_mission(args, grid_base, reference_route, active=False, seed=args.seed)
+        baseline, _, _ = build_mission(
+            args, grid_base, reference_route, active=False, seed=args.seed,
+            max_steps=max_steps, max_time=max_time,
+        )
         t0 = time.perf_counter()
         for _ in baseline.step(start_pose):
             pass
         base_elapsed = time.perf_counter() - t0
         base_summary = summarise("Reference-only ablation (baseline)", baseline, grid_base, base_elapsed)
         report["baseline"] = base_summary
+        report["config"]["max_steps"] = max_steps
         if not args.no_plots:
             save_figures(args.output_dir, grid_base, baseline, "baseline", grid_base.snapshot())
         _print_comparison(active_summary, base_summary)

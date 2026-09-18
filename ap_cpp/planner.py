@@ -89,6 +89,18 @@ class PlannerConfig:
     repair_deficit_threshold: float = 0.35
     """Coverage deficit above which a cell is considered a hole worth patching."""
 
+    enable_coverage_repair: bool = True
+    """Whether the coverage-repair generator contributes candidates.
+
+    Holes in the coverage map are a *consequence* of leaving the reference
+    corridor, so this generator only earns its keep in the active
+    configuration.  Switched off, a mission that has flown its route holds
+    station instead of being kept alive patching holes it was never pushed
+    into - which is what a genuine reference-only baseline must be allowed
+    to do, otherwise the ablation silently credits the baseline with work
+    the reference sweep never performs.
+    """
+
     reference_speed: float = 3.0
     """Nominal mission speed in m/s, used to time-stamp predicted observations."""
 
@@ -374,8 +386,11 @@ class RollingHorizonPlanner:
         # 3. Coverage repair: shortest path to the most overdue cell in the
         #    coverage map.  Detours and wind push the vehicle off the reference
         #    corridor, and those holes have to be patched or the mission never
-        #    reaches its coverage target.
-        stage("coverage_repair", self._coverage_repair_candidate(pose))
+        #    reaches its coverage target.  Gated on the active configuration:
+        #    the holes this patches are the ones active perception created, so
+        #    a reference-only baseline must not be handed it.
+        if cfg.enable_coverage_repair:
+            stage("coverage_repair", self._coverage_repair_candidate(pose))
 
         if not raw:
             return []
