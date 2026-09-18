@@ -1,269 +1,464 @@
 <div id="top"></div>
 
-<!-- PROJECT LOGO -->
-<br />
-
 <div align="center">
 
-  
-  <a href="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/images/visual_abstract.png">
-    <img src="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/images/visual_abstract.png" alt="" width="1000" height="">
+  <a href="images/adaptive_pipeline.png">
+    <img src="images/adaptive_pipeline.png" alt="Adaptive Coverage Path Planning pipeline" width="1000">
   </a>
 
-  <h3 align="center">Adaptive Coverage Path Planning</h3>
+  <h1 align="center">OverFOMO &mdash; Active Perception Coverage Path Planning</h1>
+
   <p align="center">
-    An Active Sensing Coverage Path Planning scheme for Precision Agriculture applications!
-    <!-- <br />
-    <a href="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning"><strong>Explore the docs »</strong></a>
-    <br /> -->
+    <b>AP-CPP</b>: an active-sensing extension of the OverFOMO adaptive coverage planner
+    that decides <i>where to look</i>, not only <i>how fast to fly</i>.
     <br />
-    <a href="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/gif/demo.gif">View Demo</a>
-    ·
-    <a href="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/issues">Report Bug</a>
-    ·
-    <a href="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/issues">Request Feature</a>
+    <a href="#quickstart">Quickstart</a> ·
+    <a href="#key-features">Features</a> ·
+    <a href="#algorithm">Algorithm</a> ·
+    <a href="#project-tree">Project Tree</a> ·
+    <a href="#cite-as">Citation</a> ·
+    <a href="https://github.com/Xiangyuetang91/OverFOMO/issues">Report Bug</a>
   </p>
 </div>
 
+---
 
-<!-- ############################################### -->
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#demo">Demo</a></li>
-    <li><a href="#qualitative-results">Qualitative Results</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
-    <li><a href="#cite-as">References</a></li>
-  </ol>
-</details>
+## Overview
 
+This repository extends the **OverFOMO** adaptive coverage path planning scheme
+(Krestenitis et al., *Robotics and Autonomous Systems*, 2023) for precision
+agriculture. The published method flies a pre-computed boustrophedon route
+open-loop and modulates the UAV's ground speed from the semantic content of the
+incoming imagery: confident, sparse detections let the vehicle speed up, dense
+or ambiguous canopies make it slow down.
 
-<!-- ############################################### -->
-<!-- ABOUT THE PROJECT -->
-## About The Project
-<div align="center">
-  <a href="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/images/adaptive_pipeline.png">
-    <img src="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/images/adaptive_pipeline.png" alt="" width="1000" height="">
-  </a>
-</div>
+That controller answers *how fast should I fly over this lane*. It does not
+answer *is this lane the right place to spend my battery*. **AP-CPP adds the
+missing degree of freedom.**
 
-This project deals with the path planning of a mobile robot in an active sensing coverage path planning scheme adjusting the robot's speed based on the online received information of the captured images. 
-At the heart of the proposed approach lies a novel mechanism that regulates the speed of the robot in accordance with both the relative quantity of identified classes (i.e., crops and weeds) and the confidence level of such detection. 
-A state-of-the-art deep learning segmentation model is deployed for the identification and classification of crops and weeds in the incoming images. The overall methodology is integrated into a simu-realistic pipeline utilizing [AirSim](https://github.com/microsoft/AirSim) simulator for real-time reactions and observations.
+> **The gap AP-CPP closes.** A lawnmower sweep treats every square metre as
+> equally interesting. Real fields are not: last season's yield map, an NDVI
+> anomaly from a coarse overflight, a grower's report of a problem patch, and
+> the gaps left by a previous flight all concentrate uncertainty in a handful of
+> places. A robot that cannot deviate spends its endurance imaging ground it
+> already understands, and returns with an unresolved map of the one region that
+> mattered.
 
+AP-CPP maintains an explicit **belief** over the operational area &mdash;
+occupancy plus per-cell information entropy &mdash; and re-plans the remainder of
+the route over a **receding horizon**, scoring every candidate with a utility
+that trades tour cost against expected information gain.
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+The result is a planner that is *safe by construction*: on a field where nothing
+in particular is known, a lateral-deviation term pins it to the published sweep,
+so it degrades exactly to the baseline behaviour. It only leaves the corridor
+when a genuine information hotspot outbids the detour.
 
-<!-- ############################################### -->
-<!-- GETTING STARTED -->
-## Getting Started
-
-This is an example of how you can setup the project locally.
-To get a local copy up and running follow these simple steps.
-
-### Prerequisites
-
-**Step 1. To run the project you should install the required system packages:**
-   ```sh
-   pip install -r requirements.txt
-   ```
-> Note: TensorFlow version for CPU & GPU support may differ based on your system requirements.
-
-**Step 2. Install [CUDA](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html) based on your system requirements (For GPU support).**
-
-**Step 3. Install GDAL.**
-
-   1. Download a pre-built [gdal wheel file](https://www.lfd.uci.edu/~gohlke/pythonlibs/#gdal)
-   
-   > Note: You’ll need to select the file that matches your specific Python version and operating system (32 or 64 bit).
-    
-   2.   Install the wheel file with pip
-  
-   ```sh
-   python -m pip install path-to-wheel-file.whl
-   ```
-   Assuming that you’ve used the appropriate wheel file, this should successfully install gdal.
-    
-   If you use anaconda environment, please follow the [tutorial for installing gdal with conda](https://opensourceoptions.com/blog/how-to-install-gdal-with-anaconda/).
-
-<!-- **Step 3. Install TensorFlow for CPU & GPU support based on your system requirements.** -->
-
-**Step 4. For the adaptive path planning approach you should download any available dataset for precision agriculture applications.** 
-
-> Note: The Weed Map [ASLdataset](https://projects.asl.ethz.ch/datasets/doku.php?id=weedmap:remotesensing2018weedmap) was used for this research.
- 
-
-### Installation
-
-1. Clone the repo 
-   ```sh
-   git clone https://github.com/emmarapt/Adaptive_Coverage_Path_Planning.git
-   ```
-   
-2. Download any of the available [AirSim Environments](https://github.com/microsoft/AirSim/releases) based on your OS
-  
-3. Open an AirSim environment
-    
-   * *3.1 For Windows users:*
-   
-   Go to AirSim's environment folder and launch Unreal by running the .exe application. 
-   
-   * *3.2 For Linux users:*
-   
-   Go to AirSim's environment folder via a terminal and launch Unreal by running the .sh file.
-
-4. Navigate to project directory via a terminal and run:
-    ```sh
-   python main.py
-   ```
-   
-5. Follow the message for Take-off:
-
-   ```sh
-   Press any key to takeoff
-   ```
-   
-  Enjoy the flight! <img src="https://cdn-icons-png.flaticon.com/512/72/72592.png" alt="" width="40" height="40">
-
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-
-<!-- ############################################### -->
-<!-- USAGE EXAMPLES -->
-## Usage
-
-parameters.py contains all the necessary information to run the project.
-
-- QGIS when True, the project will read the input data representing the operational area (e.g. polygon, linestring) as QGIS format. If False, the project will read the input data straightforward from the inputVariables.json.
-
-- turnwps_path contains the path of TurnWPs.txt file which provides a set of waypoints (path) to completely cover a Region of Interest. You can use your own path or create one using the following online instance http://choosepath.ddns.net/ . 
-
-> Note: The list of the waypoints are formatted in [WGS84](https://gisgeography.com/wgs84-world-geodetic-system/) coordinates.
-
-### Dataset
-- ortho_georef_img contains the path entry of the .tif field image within the dataset's folder 
-- ortho_rgb_img contains the path entry of the .png field image within the dataset's folder 
-
-### Constant speed
-- mission_type when 'constant', the robot will perform a mission with constant speed
-
-### Adaptive speed
-- mission_type when 'variable', the robot will perform a mission with adaptive speed based on the received online information
-
-### AirSim
-- initial_velocity defines the initial speed of the robot during its mission
-
-> Note: If mission_type is 'constant' the speed of the robot will be always equal to initial_velocity
-
-- distance_threshold defines a limit threshold distance between the current location of the robot and the next waypoint
-
-> Note: This is needed to overcome issue mentioned [here](https://github.com/microsoft/AirSim/issues/1643). It may need adjudications depending on the speed and the size of the operational area.
-
-- time_interval defines the time interval capture of the images
-
-- corner_radius defines a circle around every turn-waypoint with a radius equal to its value
-
-> Note: This is needed so that the robot does not deviate from the original flight plan due to speed fluctuations.
-
-
-For the rest parameters, you just need to replace the "path" entries to match with the paths in your operating system.
-
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- ############################################### -->
-<!-- Demo-->
-## Demo
-Now that you have the Adaptive Coverage Path Planning method running, you can use it for dealing with Informative Path Planning problems. 
-Here is a video demonstration of using this project utilizing AirSim simulator in AirSimNH environment.
+<br />
 
 <div align="center">
-  <a href="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/gif/demo.gif">
-    <img src="gif/demo.gif" alt="" width="650" height="350">
-  </a>
+  <img src="results/ap_cpp_demo/ap_cpp_active.png" alt="AP-CPP mission diagnostics" width="880">
+  <br />
+  <em>Belief entropy before/after, accumulated coverage, and mission convergence.</em>
 </div>
 
+---
 
-<!-- ############################################### -->
-<!-- Qualitative Results -->
-## Qualitative Results
-To validate the efficiency of the Adaptive Coverage Path Planning method we evaluate the generated orthomosaic maps in terms of image quality. 
-Towards this direction, simulated missions deployed with the baseline and the active sensing method are conducted for the field "002" of the Weedmap [ASLdataset](https://projects.asl.ethz.ch/datasets/doku.php?id=weedmap:remotesensing2018weedmap), with nominal speed of 3 m/s. 
+## Key Features
 
-<div align="center">
-  <a href="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/images/Qualitative_Results.png">
-    <img src="https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/images/Qualitative_Results.png" alt="" width="900" height="">
-  </a>
-</div>
+| Feature | Description |
+|---|---|
+| **Information-entropy belief grid** | Per-cell Shannon entropy over semantic classes, fused Bayesian-style from every observation. `ap_cpp/grid_model.py` |
+| **Exact forward model** | The planner scores candidate views by replaying the *same* fusion kernel the runtime uses &mdash; no surrogate, no train/serve skew. Covered by `test_prediction_matches_the_realised_update`. |
+| **Composite utility** | Information gain + frontier density − travel − heading change − revisit − corridor deviation, geometrically discounted over the horizon. `ap_cpp/utility.py` |
+| **Rolling-horizon planning** | Receding-horizon (MPC-style) replanning: commit a short prefix, re-optimise from the pose actually reached. Robust to wind, controller lag and misdetections by construction. |
+| **Mixed candidate set** | Reference sweep, entropy-biased A\* excursions that *rejoin* the route, an angular fan, and coverage repair &mdash; all normalised to a common horizon length before comparison. |
+| **Sensor-aware footprints** | Oriented ground rectangle with cosine off-nadir efficiency falloff, matching the RedEdge-M payload in `main.py`. Swath/along-track axes are handled explicitly (`test_swath_is_the_cross_track_extent`). |
+| **Baseline speed law preserved** | The published `G(confidence, coverage_ratio)` controller is reused bit-for-bit and extended with a bounded active-perception term. `ap_cpp/control.py` |
+| **Two perception back-ends** | A dependency-free `DemoPerceptionModel` for CI/demos, and a `SegmentationPerceptionModel` adapter for the real U-Net + GDAL orthomosaic path. |
+| **Zero-hardware demo** | Full mission with diagnostics and figures using only NumPy + matplotlib. No AirSim, no TensorFlow, no GDAL. |
+| **AirSim integration** | `ap_cpp/airsim_driver.py` drops into the existing `parameters.py` configuration unchanged. |
 
-<!-- ############################################### -->
-<!-- CONTRIBUTING -->
+---
+
+## Quickstart
+
+### 1. Requirements
+
+The **core planner and demo need only NumPy** (matplotlib optional, for figures):
+
+```sh
+python -m pip install numpy matplotlib
+```
+
+The **simulation pipeline** (AirSim + segmentation + orthomosaic) additionally
+needs the full stack from `requirements.txt`, including GDAL and TensorFlow:
+
+```sh
+python -m pip install -r requirements.txt
+```
+
+> GDAL is not on PyPI as a source distribution. Install a pre-built wheel
+> matching your Python version from
+> [here](https://www.lfd.uci.edu/~gohlke/pythonlibs/#gdal), then
+> `python -m pip install path-to-wheel-file.whl`. Anaconda users should install
+> `gdal` through conda instead.
+
+### 2. Run the demo (one command, no simulator)
+
+```sh
+python demos/run_ap_cpp_demo.py --compare
+```
+
+This runs a complete active-perception coverage mission on a synthetic
+L-shaped field with a no-fly zone, prints per-step diagnostics, runs the
+reference-only ablation alongside it, and writes a JSON report plus four-panel
+diagnostic figures to `results/ap_cpp_demo/`.
+
+```
+=== AP-CPP (active perception) ===
+  termination            : max_steps
+  observation steps      : 300
+  flight distance        : 1821.5 m
+  mean belief entropy    : 0.2384 (was 1.0000)
+  coverage fraction      : 0.2076
+  cumulative information : 63.101
+
+=== Active perception vs reference-only ablation ===
+metric                           active    reference      delta
+------------------------------------------------------------------
+flight distance [m]              1821.5       1767.7        +53.8
+mean entropy                     0.2384       0.2560      -0.0176
+coverage fraction                0.2076       0.2359      -0.0283
+information gain                 63.101       28.299      +34.802
+```
+
+The honest reading of those numbers: **AP-CPP more than doubles the information
+gathered per unit of flight** (+123%), and spends a small amount of coverage
+throughput (−0.028) to do it. That is the trade the user is buying. To recover
+coverage, raise the `frontier`/`information` weights, or run a longer mission.
+On an *uninformative* prior the two configurations are identical by design &mdash;
+see `test_active_mode_does_not_degrade_a_uniform_prior_mission`.
+
+### 3. Run against the real field shipped in this repo
+
+Uses `CPP/002/Polygon002.geojson` and the pre-baked `TurnWPs.txt` route,
+converted through the same WGS84→NED path as the flight code:
+
+```sh
+python demos/run_ap_cpp_demo.py --source geojson --field 002 --compare
+```
+
+### 4. Run the test suite
+
+```sh
+python -m unittest discover -s tests -v
+```
+
+43 tests covering rasterisation, belief fusion, sensor geometry, the utility's
+forward model, A\* and route resampling, speed-law conformance, mission
+invariants and the WGS84 round trip. No simulator or TensorFlow required.
+
+### 5. Useful demo flags
+
+```sh
+--source {synthetic,geojson}   # field geometry source
+--prior {none,anomaly,two_zones}
+                               # non-uniform uncertainty prior to explore
+--prior-weight FLOAT           # prior blend, default 0.85
+--horizon INT                  # rolling-horizon length, default 6
+--execute-steps INT            # poses committed before replanning, default 2
+--step-length FLOAT            # observation spacing, m, default 6.0
+--entropy-bias FLOAT           # uncertainty discount in A* edge cost
+--coverage-target / --entropy-target
+--no-plots                     # skip figure generation
+--compare                      # run the reference-only ablation
+```
+
+### 6. Fly it in AirSim
+
+```sh
+python -m ap_cpp.airsim_driver              # live flight
+python -m ap_cpp.airsim_driver --dry-run    # validate config without Unreal
+```
+
+`--dry-run` exercises the full belief loop against the real orthomosaic without
+connecting to the simulator &mdash; the fastest way to check that a field's
+configuration is sane before launching Unreal.
+
+---
+
+## Algorithm
+
+### Data flow
+
+```
+                      ┌───────────────────────────────────────────┐
+   parameters.py ───▶ │  GeoBridge                                │
+   *.geojson     ───▶ │  WGS84 ──▶ NED (handleGeo.ConvCoords)     │──▶ CoverageGrid
+   TurnWPs.txt   ───▶ │  rasterise polygon + obstacles            │    (occupancy,
+                      └───────────────────────────────────────────┘     entropy, coverage)
+                                        │
+                                        ▼
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │  RollingHorizonPlanner.plan(pose)             ◀── receding horizon     │
+   │                                                                        │
+   │   candidate generators                    UtilityModel.evaluate_path   │
+   │   ┌──────────────────────┐                ┌──────────────────────────┐ │
+   │   │ reference_sweep      │                │ + w_i · IG(pose)         │ │
+   │   │ frontier_astar_{k}   │─── scored ───▶ │ + w_f · frontier(pose)   │ │
+   │   │ fan_{±θ}             │   against      │ − w_d · travel           │ │
+   │   │ coverage_repair      │   the belief   │ − w_t · |Δyaw|           │ │
+   │   └──────────────────────┘                │ − w_r · revisit          │ │
+   │            ▲                              │ − w_c · corridor deviation│ │
+   │            │                              └──────────────────────────┘ │
+   │            │  entropy-biased A*, 8-connected, corner-cut-safe          │
+   │            └───────────────────────────────────────────────────────────│
+   │                                                                        │
+   │   commit first `execute_steps` poses  ──▶  next replanning epoch       │
+   └────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │  SensorModel.observe(pose, measurement_entropy)                        │
+   │  Bayesian multiplicative fusion:  H ← H · (1 − w · η · (1 − h_meas))   │
+   │  Coverage accum.:                 C ← C + η · g · (1 − C)              │
+   └────────────────────────────────────────────────────────────────────────┘
+                                        │
+                    ┌───────────────────┴───────────────────┐
+                    ▼                                       ▼
+        APCPPSpeedController                     Updated belief ──▶ next epoch
+        baseline G(conf, cr) + active term
+```
+
+### The pieces
+
+**1. Belief grid** (`ap_cpp/grid_model.py`)
+
+A raster in the local NED frame already used by `handleGeo`. Each traversable
+cell carries:
+
+- `entropy ∈ [0, 1]` — normalised Shannon entropy of the semantic belief.
+  `1.0` is "we know nothing", `0.0` is "the segmentation model is certain".
+  This is the spatially-resolved generalisation of the published method's
+  scalar *confidence level*.
+- `coverage ∈ [0, 1]` — accumulated observation quality. `1.0` means imaged
+  often enough, at a high enough ground sampling distance, to call it done.
+  Generalises the scalar *coverage ratio*.
+
+Non-traversable cells are sentinel-set (`entropy = 0`, `coverage = 1`) so they
+never attract information-driven motion while remaining valid for path search.
+
+**2. Fusion** — planned and realised updates are the *same code path*:
+
+```
+H_posterior = H_prior · (1 − w · η · (1 − h_meas))
+```
+
+where `w` is the in-frame weight, `η` the observation efficiency and `h_meas`
+the frame entropy reported by the network. A perfect measurement of a
+deterministic cell (`h_meas → 0`) collapses the belief; an uninformative one
+(`h_meas → 1`) leaves it untouched. Because
+`SensorModel.predict_update` calls `CoverageGrid.fuse` rather than reimplementing
+it, the planner optimises the true objective, and a regression test pins that
+equivalence.
+
+**3. Sensor model** (`ap_cpp/sensor.py`)
+
+The footprint is the oriented ground rectangle of a nadir camera. The
+**swath** (cross-track extent) is computed from the 46° HFOV and is what sets
+the lane spacing; the **along-track** extent is the 35° VFOV and sets the
+observation cadence. Efficiency falls off as `1/sqrt(1 + t²)` with the
+normalised off-nadir coordinate `t`, which is why *where* the robot looks
+matters and not only *whether* it looked.
+
+**4. Utility** (`ap_cpp/utility.py`)
+
+```
+U(π) = Σ_k γ^k [ w_i·IG(pose_k) + w_f·Φ(pose_k)
+               − w_d·d(pose_{k−1}, pose_k)/L
+               − w_t·|Δyaw|/180
+               − w_r·mean C(pose_k)
+               − w_c·dev(pose_k, corridor)/L ]
+```
+
+The belief is rolled forward on a scratch copy, so a candidate that re-observes
+ground already covered by an earlier step of *its own* plan correctly earns no
+second information gain.
+
+**5. Rolling horizon** (`ap_cpp/planner.py`)
+
+Candidate generators, each normalised to a common horizon length before
+scoring &mdash; a candidate that stops early would otherwise bank no travel cost
+for the leg it never flies and win by being lazy:
+
+- `reference_sweep` — the published route, resampled by **arc length** at exact
+  `step_length`. (Snapping to route *vertices* instead livelocks whenever the
+  route is sampled more coarsely than `step_length` &mdash; which the shipped
+  `TurnWPs.txt` files are. The projection is onto the nearest segment, not the
+  nearest vertex.)
+- `frontier_astar_{k}` — entropy-biased A\* out to a ranked uncertainty
+  frontier, then a plain A\* leg back onto the route. The excursion is a single
+  connected path so the travel penalty charges the full round trip; a detour
+  that does not rejoin is a coverage hole, not a plan. Frontier ranking uses a
+  summed-area integral image of uncertain density, so a lone stray cell cannot
+  outrank a genuinely unobserved region.
+- `fan_{±θ}` — straight marches on an angular fan, for the common case where a
+  small heading tweak beats a detour.
+- `coverage_repair` — shortest path to the most overdue cell by
+  `(1 − C) / distance`.
+
+Only the first `execute_steps` poses are committed. The next replan starts from
+**the pose actually reached**, which is where wind, controller lag and model
+error enter the loop and get corrected.
+
+**6. Speed** (`ap_cpp/control.py`)
+
+The published law is preserved exactly:
+
+```
+v = v_nominal + (1 − 2·cr_norm) · Q_max
+```
+
+AP-CPP adds a bounded active-perception term so the vehicle also slows where the
+*map* is unresolved, even if the current frame happens to look confident:
+
+```
+v = clip(v_nominal + (1 − 2·cr_norm)·Q_max − Q_max·(tanh(IG/IG₀) + ρ·H̄))
+```
+
+---
+
+## Project Tree
+
+```
+OverFOMO/
+├── ap_cpp/                      # ← Active Perception Coverage Path Planning
+│   ├── __init__.py              # Public API surface
+│   ├── grid_model.py            # Belief raster: occupancy, entropy, coverage, fusion
+│   ├── pose.py                  # Pose primitives, heading / angle helpers
+│   ├── sensor.py                # Camera footprint, efficiency falloff, forward model
+│   ├── utility.py               # Composite objective, path evaluation, G(x,y) bridge
+│   ├── planner.py               # Rolling-horizon planner, A*, candidate generators
+│   ├── control.py               # Baseline speed law + active-perception term
+│   ├── runtime.py               # Perception back-ends (demo + U-Net adapter)
+│   ├── mission.py               # Mission driver and flight log
+│   ├── geo_bridge.py            # WGS84 ⇄ NED mission I/O, grid construction
+│   └── airsim_driver.py         # AirSim integration (drop-in for main.py)
+│
+├── demos/
+│   └── run_ap_cpp_demo.py       # One-command runnable demo + ablation + figures
+│
+├── tests/
+│   └── test_ap_cpp.py           # 43 regression tests, NumPy-only
+│
+├── handleGeo/                   # WGS84 / NED / ECEF conversions (upstream)
+│   ├── ConvCoords.py            #   coordinate frame conversions
+│   ├── InPolygon.py             #   vectorised point-in-polygon
+│   ├── NodesInPoly.py           #   BCD node generation (upstream)
+│   ├── Dist.py
+│   └── coordinates/
+│       ├── WGS84.py
+│       ├── NED.py
+│       └── ECEF.py
+│
+├── CPP/                         # Per-field mission data
+│   └── 002/
+│       ├── Polygon002.geojson   #   operational polygon (QGIS export)
+│       ├── TurnWPs.txt          #   pre-computed boustrophedon route (WGS84)
+│       └── viewpoints_map.jpg
+│
+├── main.py                      # Original OverFOMO AirSim mission (upstream)
+├── get_new_speed.py             # U-Net speed inference (upstream)
+├── keras_tools.py, speed_function.py, check_g_func.py   # upstream analysis
+├── parameters.py                # Mission configuration (paths, payload, speeds)
+├── inputVariables.json          # Polygon/obstacle spec when QGIS=False
+├── requirements.txt             # Full simulation-pipeline dependencies
+├── results/                     # Mission outputs (generated)
+├── images/, gif/                # Documentation assets
+└── weights0500.hdf5             # Trained segmentation weights
+```
+
+---
+
+## Configuration
+
+All mission parameters live in `parameters.py`, exactly as for the original
+pipeline. AP-CPP adds its own tunables through dataclasses, all of which have
+sane defaults:
+
+| Dataclass | Module | Purpose |
+|---|---|---|
+| `GridConfig` | `grid_model.py` | Raster resolution and extent |
+| `SensorConfig` | `sensor.py` | FOV, altitude, efficiency falloff |
+| `UtilityWeights` | `utility.py` | Objective term weighting |
+| `PlannerConfig` | `planner.py` | Horizon, cadence, A\* knobs |
+| `MissionConfig` | `mission.py` | Termination criteria |
+
+Two knobs matter most in practice:
+
+- **`UtilityWeights.corridor`** (default `1.15`) — how strongly to hold the
+  published route. Raise it for conservative operations, lower it to let the
+  planner chase information harder.
+- **`UtilityWeights.information`** (default `1.0`) — the value of a unit of
+  uncertainty resolved, relative to a metre of flight.
+
+---
+
+## Controlling a Real Field: an Agronomic Prior
+
+The planner is most useful when seeded with an uncertainty prior, because a
+robot with no prior knowledge has nothing to be curious *about*. Use
+`CoverageGrid.set_uncertainty_prior`:
+
+```python
+from ap_cpp.grid_model import CoverageGrid
+from ap_cpp.geo_bridge import GeoBridge, load_qgis_polygon
+
+polygon, obstacles, _ = load_qgis_polygon("CPP/002/Polygon002.geojson")
+grid = GeoBridge(polygon, obstacles).build_grid(resolution=2.5)
+
+# Any [0, 1] risk layer at the raster's shape: last season's yield map, an
+# NDVI anomaly, a scout's report, gaps from the previous flight.
+grid.set_uncertainty_prior(ndvi_anomaly_normalised, weight=0.85)
+```
+
+Then hand the grid to a mission exactly as the demo does.
+
+---
+
 ## Contributing
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+Contributions are welcome. The workflow is standard:
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
+1. Fork the project
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Run the suite before pushing (`python -m unittest discover -s tests`)
+4. Commit using [Conventional Commits](https://www.conventionalcommits.org/)
+   (`feat(planner): ...`, `fix(sensor): ...`, `docs: ...`)
+5. Open a pull request
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+Please keep `ap_cpp/` free of simulator and TensorFlow imports at module scope
+&mdash; the demo and the test suite must keep running on a bare NumPy install.
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+---
 
-
-<!-- ############################################### -->
-<!-- LICENSE -->
 ## License
 
-Distributed under the MIT License. See [LICENSE](https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/LICENSE) for more information.
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+---
 
+## Cite As
 
-<!-- ############################################### -->
-<!-- CONTACT -->
-## Contact
+If you use the AP-CPP module, please cite the underlying OverFOMO work it
+extends:
 
-Marios Krestenitis - [github](https://github.com/wave-transmitter) - mikrestenitis@iti.gr
+*M. Krestenitis, E. K. Raptis, A. C. Kapoutsis, K. Ioannidis, E. B. Kosmatopoulos,
+and S. Vrochidis, "Overcome the fear of missing out: Active sensing UAV scanning
+for precision agriculture," Robotics and Autonomous Systems, p. 104581, 2023.*
+[[Link]](https://www.sciencedirect.com/science/article/pii/S0921889023002208)
 
-Emmanuel K. Raptis - [github](https://github.com/emmarapt) - emmarapt@iti.gr
-
-Athanasios Ch. Kapoutsis - [github](https://github.com/athakapo) - athakapo@iti.gr
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-
-<!-- ############################################### -->
-<!-- ACKNOWLEDGMENTS -->
-## Acknowledgments
-This research has been financed by the European Regional Development Fund of the European Union and Greek national funds through the Operational Program Competitiveness, Entrepreneurship and Innovation, under the call RESEARCH - CREATE - INNOVATE (T1EDK-00636).
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-
-<!-- ############################################### -->
-<!-- REFERENCES -->
-## Cite As:
-
-*M. Krestenitis, E. K. Raptis, A. C. Kapoutsis, K. Ioannidis, E. B. Kosmatopoulos, and S. Vrochidis, “Overcome the fear of missing out: Active sensing UAV scanning for precision agriculture,” Robotics and Autonomous Systems, p. 104581, 2023.* [[Link]](https://www.sciencedirect.com/science/article/pii/S0921889023002208?casa_token=Q3rGp9yQ4mUAAAAA:Qbmq0Y_O2vHUFpHkSmpZYaePm4LlK_iFB3JM7mydPZx-EZfIncASZMR21dIRqSL1Zx5EVH3-xME)
 ```bibtex
 @article{krestenitis2023overcome,
   title={Overcome the fear of missing out: Active sensing UAV scanning for precision agriculture},
@@ -275,5 +470,18 @@ This research has been financed by the European Regional Development Fund of the
 }
 ```
 
-<!-- MARKDOWN LINKS & IMAGES -->
-[product-screenshot]: https://github.com/emmarapt/Adaptive_Coverage_Path_Planning/blob/main/images/adaptive_pipeline.png
+---
+
+## Acknowledgments
+
+This research has been financed by the European Regional Development Fund of the
+European Union and Greek national funds through the Operational Program
+Competitiveness, Entrepreneurship and Innovation, under the call RESEARCH –
+CREATE – INNOVATE (T1EDK-00636).
+
+The AP-CPP extension builds on the upstream
+[Adaptive_Coverage_Path_Planning](https://github.com/emmarapt/Adaptive_Coverage_Path_Planning)
+repository, whose `handleGeo` coordinate machinery, RedEdge-M payload
+specification and segmentation network are reused unchanged.
+
+<p align="right">(<a href="#top">back to top</a>)</p>

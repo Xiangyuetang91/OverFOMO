@@ -127,3 +127,47 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# -- Project specific -- #
+
+# Generated AP-CPP mission artefacts.
+# The default demo run is committed as documentation (its figures are embedded
+# in the README); ad-hoc and long runs stay untracked.
+results/ap_cpp_demo_long/
+*.gpx
+
+# Machine-readable reports regenerate on every demo run and make diffs noisy;
+# the figures next to them are committed as README assets.
+results/ap_cpp_demo/*.json
+
+# Virtual environments
+.venv/
+venv/
+env/
+env.bak/
+venv.bak/
+.conda/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Large model weights (tracked via Git LFS / released separately)
+# weights*.hdf5
+
+# Numba / coverage caches
+.numba_cache/
+.coverage
+htmlcov/
+
+# Local scratch
+scratch/
+tmp/
