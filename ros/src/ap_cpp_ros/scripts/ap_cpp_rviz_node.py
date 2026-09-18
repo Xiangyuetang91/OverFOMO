@@ -482,9 +482,9 @@ def main(argv=None):
         if reference_route:
             args.max_steps = route_budget(reference_route, args.step_length)
         else:
-            lane = SensorModel(SensorConfig(altitude=args.altitude)).ground_width * (
-                1.0 - args.sidelap / 100.0
-            )
+            lane = SensorModel(
+                SensorConfig(altitude=args.altitude)
+            ).config.ground_width * (1.0 - args.sidelap / 100.0)
             sweep = RollingHorizonPlanner.lawnmower_from_grid(grid, lane)
             args.max_steps = route_budget(sweep, args.step_length)
         rospy.loginfo("step budget derived from the reference route: %d", args.max_steps)
