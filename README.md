@@ -36,6 +36,13 @@ That controller answers *how fast should I fly over this lane*. It does not
 answer *is this lane the right place to spend my battery*. **AP-CPP adds the
 missing degree of freedom.**
 
+> **A note on the numbers in this README.** The tables below are from the
+> dependency-free Python demo (`demos/run_ap_cpp_demo.py`), which is what CI and
+> the committed `results/` figures are generated from. The ROS node logs a
+> separate set of metrics when the planner runs under `roslaunch` against the
+> real ROS environment; the two are different runs and their figures are not
+> interchangeable. See [Demo &amp; Visualization](#demo--visualization).
+
 > **The gap AP-CPP closes.** A lawnmower sweep treats every square metre as
 > equally interesting. Real fields are not: last season's yield map, an NDVI
 > anomaly from a coarse overflight, a grower's report of a problem patch, and
@@ -60,6 +67,54 @@ when a genuine information hotspot outbids the detour.
   <img src="results/ap_cpp_demo/ap_cpp_active.png" alt="AP-CPP mission diagnostics" width="880">
   <br />
   <em>Belief entropy before/after, accumulated coverage, and mission convergence.</em>
+</div>
+
+---
+
+## Demo &amp; Visualization
+
+### Live in RViz
+
+The planner runs headlessly against the field definition in this repository and
+publishes `Path` + `MarkerArray` for RViz &mdash; no AirSim, no Unreal, no
+simulator connection. The screenshot below is from an actual run on the ROS box.
+
+<div align="center">
+  <img src="docs/rviz_demo.png" alt="AP-CPP planning live in RViz (ROS 1)" width="900">
+  <br />
+  <em>AP-CPP under <code>roslaunch ap_cpp_ros rviz_demo.launch</code> on
+  Ubuntu 20.04 + ROS Noetic. The coverage route is drawn as a <code>nav_msgs/Path</code>,
+  the belief grid and information hotspots as a <code>visualization_msgs/MarkerArray</code>;
+  the field geometry is the repository's own <code>CPP/002</code> definition.</em>
+</div>
+
+```sh
+roslaunch ap_cpp_ros rviz_demo.launch                          # AP-CPP
+roslaunch ap_cpp_ros rviz_demo.launch reference_only:=true     # ablation
+roslaunch ap_cpp_ros rviz_demo.launch source:=geojson field:=002
+```
+
+### Simulator-free mission diagnostics
+
+Running `python demos/run_ap_cpp_demo.py --compare` writes a four-panel
+diagnostic figure per arm: belief entropy before/after, accumulated coverage,
+the planned route over the field, and mission convergence.
+
+<div align="center">
+  <table>
+    <tr>
+      <th align="center">AP-CPP (active perception)</th>
+      <th align="center">Reference-only baseline</th>
+    </tr>
+    <tr>
+      <td align="center"><img src="results/ap_cpp_demo/ap_cpp_active.png" alt="AP-CPP active-perception mission" width="430"></td>
+      <td align="center"><img src="results/ap_cpp_demo/ap_cpp_baseline.png" alt="Reference-only baseline mission" width="430"></td>
+    </tr>
+    <tr>
+      <td align="center"><em>Leaves the corridor to resolve the anomaly hotspot,<br />then rejoins the reference sweep.</em></td>
+      <td align="center"><em>Pinned to the published boustrophedon sweep;<br />never deviates.</em></td>
+    </tr>
+  </table>
 </div>
 
 ---
@@ -153,6 +208,44 @@ configurations are identical by design &mdash; see
 > `enable_coverage_repair` off (see `coverage_repair` under **The pieces**), so
 > neither arm can fly past the end of the route and bank coverage the other one
 > never gets a chance at.
+
+#### Ablation
+
+<div align="center">
+  <img src="results/ablation_curve.png" alt="Ablation: AP-CPP vs reference-only sweep" width="960">
+  <br />
+  <em>Active perception vs. the reference-only sweep on the synthetic field
+  (seed 7, 864-step budget). The two arms fly a near-identical mission
+  &mdash; 864 vs 863 observation steps, 5183 m vs 5047 m &mdash; so the
+  +44% information gain is bought by <b>where</b> the vehicle looks, not by
+  flying further. Coverage is the price paid: 0.580 vs 0.758.</em>
+</div>
+
+#### Trajectory comparison
+
+The pair below is the same ablation flown against the repository's own field
+`CPP/002` (`--source geojson`). Both arms see the identical anomaly prior; only
+AP-CPP is free to leave the corridor. The divergence is visible in the
+entropy-after panels: the baseline sweeps the polygon in parallel lanes and
+leaves the hotspot half-resolved, while AP-CPP cuts diagonal traverses into it
+before rejoining the route.
+
+<div align="center">
+  <table>
+    <tr>
+      <th align="center">AP-CPP (active perception)</th>
+      <th align="center">Reference-only baseline</th>
+    </tr>
+    <tr>
+      <td align="center"><img src="results/ap_cpp_demo_geojson/ap_cpp_active.png" alt="AP-CPP trajectory on field 002" width="430"></td>
+      <td align="center"><img src="results/ap_cpp_demo_geojson/ap_cpp_baseline.png" alt="Baseline trajectory on field 002" width="430"></td>
+    </tr>
+    <tr>
+      <td align="center"><em>Deviates into the hotspot, then rejoins.<br />info gain 10.99, coverage 0.561</em></td>
+      <td align="center"><em>Parallel lanes, corridor-pinned.<br />info gain 9.52, coverage 0.744</em></td>
+    </tr>
+  </table>
+</div>
 
 ### 3. Run against the real field shipped in this repo
 
