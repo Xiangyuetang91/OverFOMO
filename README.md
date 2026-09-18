@@ -80,12 +80,21 @@ publishes `Path` + `MarkerArray` for RViz &mdash; no AirSim, no Unreal, no
 simulator connection. The screenshot below is from an actual run on the ROS box.
 
 <div align="center">
-  <img src="docs/rviz_demo.png" alt="AP-CPP planning live in RViz (ROS 1)" width="900">
+  <a href="docs/rviz_demo.svg">
+    <img src="docs/rviz_demo.png" alt="AP-CPP planning live in RViz (ROS 1)" width="900">
+  </a>
   <br />
   <em>AP-CPP under <code>roslaunch ap_cpp_ros rviz_demo.launch</code> on
-  Ubuntu 20.04 + ROS Noetic. The coverage route is drawn as a <code>nav_msgs/Path</code>,
-  the belief grid and information hotspots as a <code>visualization_msgs/MarkerArray</code>;
-  the field geometry is the repository's own <code>CPP/002</code> definition.</em>
+  <b>Ubuntu 22.04 (VMware virtual machine) + ROS Noetic</b>
+  (<code>rosversion 1.16.0</code>), project checkout at
+  <code>/home/user/catkin_ws/src/OverFOMO</code>. The coverage route is drawn as a
+  <code>nav_msgs/Path</code>, the belief grid and information hotspots as a
+  <code>visualization_msgs/MarkerArray</code>; the field geometry is the
+  repository's own <code>CPP/002</code> definition.
+  <br />
+  <sub>Click the image for the vector version (<code>docs/rviz_demo.svg</code>) &mdash;
+  scalable, but traced from a raster screenshot, so the small terminal text is
+  sharper in the PNG above.</sub></em>
 </div>
 
 ```sh
@@ -93,6 +102,22 @@ roslaunch ap_cpp_ros rviz_demo.launch                          # AP-CPP
 roslaunch ap_cpp_ros rviz_demo.launch reference_only:=true     # ablation
 roslaunch ap_cpp_ros rviz_demo.launch source:=geojson field:=002
 ```
+
+#### What this demo validates
+
+The scope here is the **AP-CPP core algorithm** &mdash; not a full simulator
+fly-through. The run above is the evidence for the planner itself, and it
+covers all three things that matter for the algorithm:
+
+| Evidence | Published as | Seen in |
+|---|---|---|
+| **Global coverage trajectory** &mdash; the receding-horizon route over the field, with its excursions and rejoins | `nav_msgs/Path` | RViz screenshot above; four-panel figures below |
+| **Information-hotspot belief grid** &mdash; per-cell entropy, computed before and after the mission | `visualization_msgs/MarkerArray` | RViz screenshot; `Belief entropy` panels |
+| **Ablation vs. baseline** &mdash; active perception against the reference-only sweep, on identical field and prior | second arm of the same launch (`reference_only:=true`) | `Ablation` and `Trajectory comparison` figures under Quickstart &sect;2 |
+
+No Gazebo scene, no Unreal render and no AirSim flight imagery is required to
+reproduce any of it: the planner is simulator-independent by construction and
+the figures regenerate from the committed code.
 
 ### Simulator-free mission diagnostics
 
@@ -328,7 +353,9 @@ demo uses and publishes the result for RViz, so this path needs neither AirSim,
 Unreal, nor the TensorFlow/GDAL stack &mdash; only a sourced ROS 1 environment
 and NumPy.
 
-On the ROS machine (typically an Ubuntu VM; ROS 1 Noetic on Ubuntu 20.04):
+The configuration used for the screenshot above is **Ubuntu 22.04 running in a
+VMware virtual machine, with ROS Noetic (`rosversion 1.16.0`)**, and the
+repository checked out at `/home/user/catkin_ws/src/OverFOMO`:
 
 ```sh
 sudo apt install ros-noetic-desktop-full python3-numpy
